@@ -44,6 +44,13 @@ const DEFAULTS = {
   name: "",
   theme: "auto", nuance: "theme", intensite: 1, // auto (suit Home Assistant), light, dark
   image: "", // photo du poêle (facultatif), ex. /local/poele.png
+  image_mode: "background", // background : photo en fond + dessin animé | replace : la photo remplace le dessin
+  image_opacity: 0.35,
+  status_entity: "", // entité dont l'état (en anglais) est traduit en français, ex. sensor.poele_status
+  status_map: {}, // traductions personnalisées : { "load pellet": "Chargement pellet" }
+  power_entity: "", // input_number / number de puissance (1 à 5)
+  power_min: 1,
+  power_max: 5,
   info_entities: [],
   pellet_entity: "",
   temp_step: 0, // 0 = automatique (attribut target_temp_step, sinon 0,5)
@@ -59,6 +66,38 @@ const ICONS = {
   temperature: "mdi:thermometer", humidity: "mdi:water-percent", battery: "mdi:battery",
   power: "mdi:flash", pressure: "mdi:gauge", duration: "mdi:timer-outline",
 };
+
+/* Traduction des statuts : [libellé, ton] — ton : off | fire | ok | warn | err */
+const STATUS_FR = {
+  "off": ["Éteint", "off"], "stop": ["Arrêt", "off"], "stopped": ["Arrêt", "off"], "standby": ["Veille", "ok"], "stand by": ["Veille", "ok"],
+  "idle": ["En attente", "ok"], "wait": ["Attente", "ok"], "waiting": ["Attente", "ok"], "on": ["Allumé", "fire"],
+  "start": ["Démarrage", "fire"], "starting": ["Démarrage", "fire"], "startup": ["Démarrage", "fire"], "start up": ["Démarrage", "fire"],
+  "ignition": ["Allumage", "fire"], "igniting": ["Allumage", "fire"], "ignite": ["Allumage", "fire"], "fire up": ["Allumage", "fire"], "test fire": ["Test d'allumage", "fire"],
+  "load pellet": ["Chargement pellet", "fire"], "loading pellet": ["Chargement pellet", "fire"], "loading pellets": ["Chargement pellet", "fire"], "load pellets": ["Chargement pellet", "fire"], "fueling": ["Chargement pellet", "fire"],
+  "heatup": ["Montée en température", "fire"], "heat up": ["Montée en température", "fire"], "warming up": ["Montée en température", "fire"], "preheating": ["Préchauffage", "fire"],
+  "work": ["Travail", "fire"], "working": ["Travail", "fire"], "run": ["Travail", "fire"], "running": ["Travail", "fire"], "burning": ["Combustion", "fire"], "burn": ["Combustion", "fire"], "heating": ["En chauffe", "fire"],
+  "modulation": ["Modulation", "fire"], "modulating": ["Modulation", "fire"], "burning mod": ["Combustion modulée", "fire"], "eco": ["Éco", "ok"], "ecomode": ["Éco", "ok"], "eco mode": ["Éco", "ok"],
+  "ext": ["Extinction", "warn"], "extinguish": ["Extinction", "warn"], "extinguishing": ["Extinction", "warn"], "extinction": ["Extinction", "warn"], "fire stop": ["Extinction", "warn"], "shutdown": ["Extinction", "warn"], "shutting down": ["Extinction", "warn"],
+  "clean": ["Nettoyage", "warn"], "cleaning": ["Nettoyage", "warn"], "clean fire": ["Nettoyage du foyer", "warn"], "cleanup": ["Nettoyage final", "warn"], "clean up": ["Nettoyage final", "warn"],
+  "cool": ["Refroidissement", "warn"], "cooling": ["Refroidissement", "warn"], "cooling down": ["Refroidissement", "warn"], "cool fluid": ["Refroidissement", "warn"],
+  "fan": ["Ventilation", "ok"], "fan only": ["Ventilation", "ok"], "ventilation": ["Ventilation", "ok"],
+  "error": ["Erreur", "err"], "fault": ["Défaut", "err"], "alarm": ["Alarme", "err"], "alert": ["Alerte", "err"], "failure": ["Panne", "err"], "no pellet": ["Plus de granulés", "err"], "out of pellets": ["Plus de granulés", "err"],
+  "chimney alarm": ["Alarme conduit", "err"], "unavailable": ["Indisponible", "off"], "unknown": ["Inconnu", "off"],
+};
+const normStatus = (v) => String(v ?? "").trim().toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ");
+
+function translateStatus(raw, custom) {
+  const k = normStatus(raw);
+  if (custom) {
+    for (const [ck, cv] of Object.entries(custom)) {
+      if (normStatus(ck) === k) { const base = STATUS_FR[k]; return { label: String(cv), tone: base ? base[1] : "ok" }; }
+    }
+  }
+  const t = STATUS_FR[k];
+  if (t) return { label: t[0], tone: t[1] };
+  const nice = String(raw ?? "").replace(/[_]+/g, " ").trim();
+  return { label: nice ? nice.charAt(0).toUpperCase() + nice.slice(1) : "—", tone: "ok" };
+}
 
 function stoveState(st) {
   if (bad(st)) return { key: "off", label: "Indisponible", on: false, unknown: true };
@@ -142,7 +181,7 @@ class PelletStoveCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     const infos = this._infos().map((i) => i.entity);
-    const ids = [this._config.entity, this._config.pellet_entity, ...infos].filter(Boolean);
+    const ids = [this._config.entity, this._config.pellet_entity, this._config.status_entity, this._config.power_entity, ...infos].filter(Boolean);
     const sig = ids.map((e) => {
       const s = hass.states[e];
       return s ? s.state + "|" + JSON.stringify([s.attributes.hvac_action, s.attributes.temperature, s.attributes.current_temperature]) : "x";
@@ -210,6 +249,16 @@ class PelletStoveCard extends HTMLElement {
     }, 700);
   }
 
+  _setLevel(v) {
+    const eid = this._config.power_entity;
+    if (!eid) return;
+    const dom = eid.split(".")[0];
+    this._levelPending = v; this._sig = ""; this._render();
+    this._hass.callService(dom === "number" || dom === "input_number" ? dom : "input_number", "set_value", { entity_id: eid, value: v });
+    clearTimeout(this._levelTimer);
+    this._levelTimer = setTimeout(() => { this._levelPending = null; this._sig = ""; this._render(); }, 4000);
+  }
+
   _power() {
     const st = this._hass.states[this._config.entity];
     if (bad(st)) return;
@@ -234,6 +283,14 @@ class PelletStoveCard extends HTMLElement {
     if (!c || !h) return;
     const st = h.states[c.entity];
     const ss = stoveState(st);
+    const sst = c.status_entity ? h.states[c.status_entity] : null;
+    if (c.status_entity) {
+      const tr = translateStatus(sst ? sst.state : "unavailable", c.status_map);
+      ss.label = tr.label;
+      if (tr.tone === "off" || tr.tone === "err") { ss.flame = false; if (tr.tone === "off") ss.on = false; }
+      else if (tr.tone === "fire") { ss.flame = true; ss.on = true; }
+      ss.key = tr.tone === "fire" ? "heating" : tr.tone === "ok" ? "idle" : tr.tone;
+    }
     const dark = this._isDark();
     const name = c.name || (st && st.attributes.friendly_name) || "Poêle";
     const attrs = (st && st.attributes) || {};
@@ -274,7 +331,26 @@ class PelletStoveCard extends HTMLElement {
         <i class="bar"><u style="width:${lvl === null ? 0 : lvl}%"></u></i></button>`;
     }
 
-    const photo = c.image && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image;
+    // Puissance (1 à 5)
+    let powerHtml = "";
+    if (c.power_entity) {
+      const pst = h.states[c.power_entity];
+      const pa = (pst && pst.attributes) || {};
+      const pmin = isNum(c.power_min) ? Number(c.power_min) : 1, pmax = isNum(c.power_max) ? Number(c.power_max) : 5;
+      const curv = this._levelPending !== null && this._levelPending !== undefined ? this._levelPending : (!bad(pst) && isNum(pst.state) ? Number(pst.state) : null);
+      const btns = [];
+      for (let v = pmin; v <= pmax && btns.length < 12; v++) {
+        btns.push(`<button class="lv ${curv !== null && v <= curv ? "on" : ""} ${curv === v ? "cur" : ""}" data-level="${v}" aria-label="Puissance ${v}"${c.show_controls ? "" : " disabled"}>${v}</button>`);
+      }
+      powerHtml = `<div class="powerbox"><div class="pwh"><span class="tl"><ha-icon icon="mdi:fire"></ha-icon><span class="tn">${esc(c.power_name || "Puissance")}</span></span>
+        <button class="pwv" data-more="${esc(c.power_entity)}">${curv === null ? "—" : esc(curv) + " / " + pmax}</button></div>
+        <div class="lvls">${btns.join("")}</div></div>`;
+    }
+
+    const bgMode = c.image && c.image_mode !== "replace";
+    const photo = c.image_mode === "replace" && c.image && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image;
+    const bgLayer = c.image && bgMode && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image
+      ? `<div class="bgimg" style="background-image:url('${esc(String(c.image).replace(/'/g, "%27"))}');opacity:${isNum(c.image_opacity) ? Number(c.image_opacity) : 0.35}"></div><div class="bgshade"></div>` : "";
     const art = photo
       ? `<div class="art photo"><img src="${esc(c.image)}" alt="${esc(name)}"></div>`
       : `<div class="art">${stoveSvg(!!ss.flame, ss.on, this._uid)}</div>`;
@@ -290,16 +366,20 @@ class PelletStoveCard extends HTMLElement {
           --sv-border:rgba(255,255,255,.14); --sv-shadow:0 .6em 2em rgba(0,0,0,.35);
           --sv-glass:rgba(255,255,255,.07); --sv-glass-b:rgba(255,255,255,.13);
           --sv-fill:rgba(255,255,255,.09); --sv-fill-b:rgba(255,255,255,.16); --sv-track:rgba(255,255,255,.16);
-          --sv-ok:#3ddc84; --sv-warn:#ffb86b; --sv-err:#ff5a5f; --sv-fire:#ff8a3d; --sv-off:#8a8f9c;
+          --sv-bgc:#1b1e32; --sv-ok:#3ddc84; --sv-warn:#ffb86b; --sv-err:#ff5a5f; --sv-fire:#ff8a3d; --sv-off:#8a8f9c;
         }
         ha-card.light {
           --sv-text:#1c2030; --sv-muted:#5d6477; --sv-bg:var(--g-bg-x,linear-gradient(160deg,#f8f9fd 0%,#eef1f8 55%,#f8eff0 100%));
           --sv-border:rgba(20,24,40,.12); --sv-shadow:0 .4em 1.4em rgba(20,24,40,.12);
           --sv-glass:rgba(255,255,255,.7); --sv-glass-b:rgba(20,24,40,.1);
           --sv-fill:rgba(20,24,40,.06); --sv-fill-b:rgba(20,24,40,.14); --sv-track:rgba(20,24,40,.12);
-          --sv-ok:#1a9d55; --sv-warn:#c77a14; --sv-err:#d32f35; --sv-fire:#e06a14; --sv-off:#8a8f9c;
+          --sv-bgc:#f8f9fd; --sv-ok:#1a9d55; --sv-warn:#c77a14; --sv-err:#d32f35; --sv-fire:#e06a14; --sv-off:#8a8f9c;
         }
-        ha-card { display:flex; flex-direction:column; gap:12px; padding:16px; overflow:hidden; color:var(--sv-text);
+        .bgimg { position:absolute; inset:0; background-size:cover; background-position:center; pointer-events:none; }
+        .bgshade { position:absolute; inset:0; pointer-events:none; background:linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--sv-bgc) 55%, transparent) 100%); }
+        ha-card > * { position:relative; }
+        ha-card > .bgimg, ha-card > .bgshade { position:absolute; }
+        ha-card { position:relative; display:flex; flex-direction:column; gap:12px; padding:16px; overflow:hidden; color:var(--sv-text);
           border-radius:24px; border:1px solid var(--sv-border); background:var(--sv-bg); box-shadow:var(--sv-shadow); }
         button { font:inherit; color:inherit; cursor:pointer; border:0; background:none; padding:0; text-align:left; -webkit-tap-highlight-color:transparent; }
         ha-icon { --mdc-icon-size:1.2em; flex:none; }
@@ -308,7 +388,12 @@ class PelletStoveCard extends HTMLElement {
         .title b { font-size:1.1em; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .state { display:flex; align-items:center; gap:.5em; font-size:.85em; font-weight:600; color:var(--sv-off); }
         .state::before { content:""; width:.6em; height:.6em; border-radius:50%; background:currentColor; box-shadow:0 0 .6em currentColor; flex:none; }
-        .state.heating { color:var(--sv-fire); } .state.idle, .state.fan { color:var(--sv-ok); }
+        .state.heating { color:var(--sv-fire); } .state.idle, .state.fan, .state.ok { color:var(--sv-ok); } .state.warn { color:var(--sv-warn); } .state.err { color:var(--sv-err); }
+        .powerbox { display:flex; flex-direction:column; gap:.55em; padding:.7em .85em; border-radius:1em; background:var(--sv-glass); border:1px solid var(--sv-glass-b); -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%); }
+        .pwh { display:flex; justify-content:space-between; align-items:center; } .pwv { font-weight:700; font-variant-numeric:tabular-nums; }
+        .lvls { display:flex; gap:.4em; }
+        .lv { flex:1; text-align:center; padding:.55em 0; border-radius:.7em; font-weight:700; background:var(--sv-fill); border:1px solid var(--sv-fill-b); touch-action:manipulation; }
+        .lv.on { background:color-mix(in srgb, var(--sv-fire) 28%, transparent); border-color:var(--sv-fire); } .lv.cur { background:var(--sv-fire); color:#fff; } .lv:disabled { cursor:default; }
         .power { display:grid; place-items:center; width:2.8em; height:2.8em; border-radius:50%; background:var(--sv-fill); border:1px solid var(--sv-fill-b); }
         .power ha-icon { --mdc-icon-size:1.5em; }
         .power.on { color:var(--sv-fire); border-color:var(--sv-fire); }
@@ -350,7 +435,7 @@ class PelletStoveCard extends HTMLElement {
         @media (prefers-reduced-motion: reduce) { .fl, .glowpulse, .led { animation:none; } }
         @container (max-width:300px) { .panel { grid-template-columns:1fr; } }
       </style>
-      <ha-card class="${dark ? "dark" : "light"}" style="${gvStyle(this._config, dark)}">
+      <ha-card class="${dark ? "dark" : "light"}" style="${gvStyle(this._config, dark)}">${bgLayer}
         <div class="head">
           <div class="title"><b>${esc(name)}</b><span class="state ${ss.key}">${esc(ss.label)}</span></div>
           ${c.show_controls && !ss.unknown ? `<button class="power ${ss.on ? "on" : ""}" data-action="power" title="${ss.on ? "Éteindre" : "Allumer"}"><ha-icon icon="mdi:power"></ha-icon></button>` : ""}
@@ -369,12 +454,15 @@ class PelletStoveCard extends HTMLElement {
           </div>
         </div>
         ${extraHtml}
+        ${powerHtml}
         ${pellet}
         ${tiles ? `<div class="tiles">${tiles}</div>` : ""}
       </ha-card>`;
 
     const root = this.shadowRoot;
     root.querySelectorAll("[data-more]").forEach((el) => el.addEventListener("click", () => this._more(el.dataset.more)));
+    root.querySelectorAll("[data-level]").forEach((el) => el.addEventListener("click", () => this._setLevel(Number(el.dataset.level))));
+    root.querySelectorAll(".bgimg").forEach(() => { const im = new Image(); im.onerror = () => { this._imgFailed = c.image; this._sig = ""; this._render(); }; im.src = c.image; });
     root.querySelectorAll("[data-action]").forEach((el) => el.addEventListener("click", () => {
       const a = el.dataset.action;
       if (a === "power") this._power();
@@ -390,6 +478,8 @@ class PelletStoveCard extends HTMLElement {
 const LABELS = { ...GV_LABELS,
   entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)",
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", image: "Photo du poêle (ex. /local/poele.png)",
+  status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_min: "Puissance minimale", power_max: "Puissance maximale",
+  image_mode: "Photo", image_opacity: "Opacité de la photo de fond",
   temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", theme: "Thème",
 };
 
@@ -410,7 +500,9 @@ class PelletStoveCardEditor extends HTMLElement {
       this._form.computeLabel = (s) => LABELS[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
-        this._config = { ...this._config, ...ev.detail.value };
+        const cfg = { ...this._config, ...ev.detail.value };
+        ["status_entity", "power_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+        this._config = cfg;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
       });
       this.appendChild(this._form);
@@ -422,7 +514,18 @@ class PelletStoveCardEditor extends HTMLElement {
       { name: "name", selector: { text: {} } },
       { name: "info_entities", selector: { entity: { multiple: true } } },
       { name: "pellet_entity", selector: { entity: {} } },
+      { name: "status_entity", selector: { entity: {} } },
+      { name: "power_entity", selector: { entity: { domain: ["input_number", "number"] } } },
+      { type: "grid", name: "", schema: [
+        { name: "power_min", selector: { number: { min: 0, max: 20, mode: "box" } } },
+        { name: "power_max", selector: { number: { min: 1, max: 20, mode: "box" } } },
+      ] },
       { name: "image", selector: { text: {} } },
+      { type: "grid", name: "", schema: [
+        { name: "image_mode", selector: { select: { mode: "dropdown", options: [
+          { value: "background", label: "En fond, avec le dessin animé" }, { value: "replace", label: "À la place du dessin" } ] } } },
+        { name: "image_opacity", selector: { number: { min: 0.05, max: 1, step: 0.05, mode: "slider" } } },
+      ] },
       {
         type: "grid", name: "", schema: [
           { name: "temp_step", selector: { number: { min: 0, max: 5, step: 0.1, mode: "box" } } },

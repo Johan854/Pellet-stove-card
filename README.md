@@ -13,6 +13,14 @@ type: custom:pellet-stove-card
 entity: climate.poele
 name: Poêle du salon
 image: /local/poele.png        # facultatif : votre photo (dossier /config/www/)
+image_mode: background         # background (photo en fond + dessin animé) | replace
+image_opacity: 0.35
+status_entity: sensor.poele_status   # statut traduit en français
+status_map:                          # traductions personnalisées (facultatif)
+  load pellet: Chargement pellet
+power_entity: input_number.poele_puissance   # puissance de 1 à 5
+power_min: 1
+power_max: 5
 pellet_entity: sensor.niveau_granules
 info_entities:
   - sensor.maison_smoke_temperature
@@ -24,7 +32,13 @@ theme: auto                    # auto | light | dark
 |---|---|
 | `entity` | Entité `climate` du poêle (obligatoire) |
 | `name` | Nom affiché |
-| `image` | Photo du poêle ; sans elle, un dessin animé est utilisé |
+| `image` | Photo du poêle (facultative) |
+| `image_mode` | `background` : photo en fond derrière le dessin animé (défaut) · `replace` : la photo remplace le dessin |
+| `image_opacity` | Opacité de la photo de fond |
+| `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `work` → Travail, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
+| `status_map` | Vos propres traductions (`état: libellé`), prioritaires sur les traductions intégrées |
+| `power_entity` | `input_number` ou `number` de puissance : boutons 1 à 5 |
+| `power_min` / `power_max` | Bornes des boutons de puissance (1 et 5 par défaut) |
 | `pellet_entity` | Niveau de granulés en % (barre colorée) |
 | `info_entities` | Capteurs affichés en tuiles (clic = historique) |
 | `temp_step` | Pas de la consigne (0 = automatique) |
