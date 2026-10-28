@@ -19,6 +19,7 @@ status_entity: sensor.poele_status   # statut traduit en français
 status_map:                          # traductions personnalisées (facultatif)
   load pellet: Chargement pellet
 power_entity: input_number.poele_puissance   # puissance de 1 à 5
+power_real_entity: sensor.maison_real_power
 power_min: 1
 power_max: 5
 pellet_entity: sensor.niveau_granules
@@ -38,6 +39,7 @@ theme: auto                    # auto | light | dark
 | `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `flame light` → Flamme allumée, `work` → Travail, `cleaning final` → Nettoyage final, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
 | `status_map` | Vos propres traductions (`état: libellé`), prioritaires sur les traductions intégrées |
 | `power_entity` | `input_number` ou `number` de puissance : boutons 1 à 5 |
+| `power_real_entity` | Lecture de la puissance réelle (affichée sous le réglage) |
 | `power_min` / `power_max` | Bornes des boutons de puissance (1 et 5 par défaut) |
 | `pellet_entity` | Niveau de granulés en % (barre colorée) |
 | `info_entities` | Capteurs affichés en tuiles (clic = historique) |

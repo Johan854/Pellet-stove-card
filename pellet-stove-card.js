@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.1.1";
+const CARD_VERSION = "1.2.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -49,6 +49,7 @@ const DEFAULTS = {
   status_entity: "", // entité dont l'état (en anglais) est traduit en français, ex. sensor.poele_status
   status_map: {}, // traductions personnalisées : { "load pellet": "Chargement pellet" }
   power_entity: "", // input_number / number de puissance (1 à 5)
+  power_real_entity: "", // lecture de la puissance réelle (facultatif)
   power_min: 1,
   power_max: 5,
   info_entities: [],
@@ -71,10 +72,17 @@ const ICONS = {
 const STATUS_FR = {
   "off": ["Éteint", "off"], "stop": ["Arrêt", "off"], "stopped": ["Arrêt", "off"], "standby": ["Veille", "ok"], "stand by": ["Veille", "ok"],
   "idle": ["En attente", "ok"], "wait": ["Attente", "ok"], "waiting": ["Attente", "ok"], "on": ["Allumé", "fire"],
-  "start": ["Démarrage", "fire"], "starting": ["Démarrage", "fire"], "startup": ["Démarrage", "fire"], "start up": ["Démarrage", "fire"],
+  "start": ["Démarrage", "warn"], "starting": ["Démarrage", "warn"], "startup": ["Démarrage", "warn"], "start up": ["Démarrage", "warn"],
   "flame light": ["Flamme allumée", "fire"], "flame lit": ["Flamme allumée", "fire"], "flame on": ["Flamme allumée", "fire"],
   "cleaning final": ["Nettoyage final", "warn"], "final cleaning": ["Nettoyage final", "warn"], "cleaning start": ["Nettoyage initial", "fire"], "start cleaning": ["Nettoyage initial", "fire"], "cleaning start up": ["Nettoyage initial", "fire"],
-  "off timer": ["Éteint (programmation)", "off"], "check up": ["Vérification", "fire"], "wait flame": ["Attente de flamme", "fire"],
+  "off timer": ["Éteint (programmation)", "off"], "check up": ["Vérification", "warn"], "wait flame": ["Attente de flamme", "fire"],
+  "alarm mem": ["Alarme en mémoire", "warn"], "memory alarm": ["Alarme en mémoire", "warn"], "mem alarm": ["Alarme en mémoire", "warn"],
+  "cleaning fire pot": ["Nettoyage du creuset", "warn"], "fire pot cleaning": ["Nettoyage du creuset", "warn"], "ashpan cleaning": ["Nettoyage du cendrier", "warn"], "cleaning grate": ["Nettoyage de la grille", "warn"],
+  "awaiting flame": ["Attente de flamme", "fire"], "waiting flame": ["Attente de flamme", "fire"], "waiting restart": ["Attente de redémarrage", "ok"],
+  "eco stop": ["Arrêt éco", "ok"], "t eco stop": ["Arrêt éco", "ok"], "pellet finished": ["Plus de granulés", "err"], "pellet last": ["Dernier granulé", "err"], "failure to ignite": ["Échec d'allumage", "err"],
+  "safety pellet": ["Sécurité granulés", "err"], "pellet load": ["Chargement pellet", "fire"], "pellet working": ["Travail", "fire"], "wood working": ["Travail", "fire"],
+  "pellet light prep": ["Préparation allumage", "fire"], "start phase i": ["Démarrage phase 1", "fire"], "start phase ii": ["Démarrage phase 2", "fire"],
+  "t off": ["Éteint (programmation)", "off"], "toff": ["Éteint (programmation)", "off"], "t ext": ["Éteint (thermostat)", "off"],
   "ignition": ["Allumage", "fire"], "igniting": ["Allumage", "fire"], "ignite": ["Allumage", "fire"], "fire up": ["Allumage", "fire"], "test fire": ["Test d'allumage", "fire"],
   "load pellet": ["Chargement pellet", "fire"], "loading pellet": ["Chargement pellet", "fire"], "loading pellets": ["Chargement pellet", "fire"], "load pellets": ["Chargement pellet", "fire"], "fueling": ["Chargement pellet", "fire"],
   "heatup": ["Montée en température", "fire"], "heat up": ["Montée en température", "fire"], "warming up": ["Montée en température", "fire"], "preheating": ["Préchauffage", "fire"],
@@ -87,7 +95,7 @@ const STATUS_FR = {
   "error": ["Erreur", "err"], "fault": ["Défaut", "err"], "alarm": ["Alarme", "err"], "alert": ["Alerte", "err"], "failure": ["Panne", "err"], "no pellet": ["Plus de granulés", "err"], "out of pellets": ["Plus de granulés", "err"],
   "chimney alarm": ["Alarme conduit", "err"], "unavailable": ["Indisponible", "off"], "unknown": ["Inconnu", "off"],
 };
-const normStatus = (v) => String(v ?? "").trim().toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ");
+const normStatus = (v) => String(v ?? "").trim().toLowerCase().replace(/\./g, "").replace(/[_\-]+/g, " ").replace(/\s+/g, " ");
 
 function translateStatus(raw, custom) {
   const k = normStatus(raw);
@@ -184,7 +192,7 @@ class PelletStoveCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     const infos = this._infos().map((i) => i.entity);
-    const ids = [this._config.entity, this._config.pellet_entity, this._config.status_entity, this._config.power_entity, ...infos].filter(Boolean);
+    const ids = [this._config.entity, this._config.pellet_entity, this._config.status_entity, this._config.power_entity, this._config.power_real_entity, ...infos].filter(Boolean);
     const sig = ids.map((e) => {
       const s = hass.states[e];
       return s ? s.state + "|" + JSON.stringify([s.attributes.hvac_action, s.attributes.temperature, s.attributes.current_temperature]) : "x";
@@ -341,12 +349,15 @@ class PelletStoveCard extends HTMLElement {
       const pa = (pst && pst.attributes) || {};
       const pmin = isNum(c.power_min) ? Number(c.power_min) : 1, pmax = isNum(c.power_max) ? Number(c.power_max) : 5;
       const curv = this._levelPending !== null && this._levelPending !== undefined ? this._levelPending : (!bad(pst) && isNum(pst.state) ? Number(pst.state) : null);
+      const rst = c.power_real_entity ? h.states[c.power_real_entity] : null;
+      const realHtml = c.power_real_entity ? `<button class="pwreal" data-more="${esc(c.power_real_entity)}"><ha-icon icon="mdi:gauge"></ha-icon>Puissance réelle : <b>${bad(rst) ? "—" : isNum(rst.state) ? esc(this._fmt(rst.state, Number.isInteger(Number(rst.state)) ? 0 : 1)) + (rst.attributes.unit_of_measurement ? " " + esc(rst.attributes.unit_of_measurement) : "") : esc(rst.state)}</b></button>` : "";
       const btns = [];
       for (let v = pmin; v <= pmax && btns.length < 12; v++) {
         btns.push(`<button class="lv ${curv !== null && v <= curv ? "on" : ""} ${curv === v ? "cur" : ""}" data-level="${v}" aria-label="Puissance ${v}"${c.show_controls ? "" : " disabled"}>${v}</button>`);
       }
       powerHtml = `<div class="powerbox"><div class="pwh"><span class="tl"><ha-icon icon="mdi:fire"></ha-icon><span class="tn">${esc(c.power_name || "Puissance")}</span></span>
         <button class="pwv" data-more="${esc(c.power_entity)}">${curv === null ? "—" : esc(curv) + " / " + pmax}</button></div>
+        ${realHtml}
         <div class="lvls">${btns.join("")}</div></div>`;
     }
 
@@ -394,6 +405,7 @@ class PelletStoveCard extends HTMLElement {
         .state.heating { color:var(--sv-fire); } .state.idle, .state.fan, .state.ok { color:var(--sv-ok); } .state.warn { color:var(--sv-warn); } .state.err { color:var(--sv-err); }
         .powerbox { display:flex; flex-direction:column; gap:.55em; padding:.7em .85em; border-radius:1em; background:var(--sv-glass); border:1px solid var(--sv-glass-b); -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%); }
         .pwh { display:flex; justify-content:space-between; align-items:center; } .pwv { font-weight:700; font-variant-numeric:tabular-nums; }
+        .pwreal { display:flex; align-items:center; gap:.4em; font-size:.8em; color:var(--sv-muted); } .pwreal b { color:var(--sv-text); }
         .lvls { display:flex; gap:.4em; }
         .lv { flex:1; text-align:center; padding:.55em 0; border-radius:.7em; font-weight:700; background:var(--sv-fill); border:1px solid var(--sv-fill-b); touch-action:manipulation; }
         .lv.on { background:color-mix(in srgb, var(--sv-fire) 28%, transparent); border-color:var(--sv-fire); } .lv.cur { background:var(--sv-fire); color:#fff; } .lv:disabled { cursor:default; }
@@ -481,7 +493,7 @@ class PelletStoveCard extends HTMLElement {
 const LABELS = { ...GV_LABELS,
   entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)",
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", image: "Photo du poêle (ex. /local/poele.png)",
-  status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_min: "Puissance minimale", power_max: "Puissance maximale",
+  status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
   image_mode: "Photo", image_opacity: "Opacité de la photo de fond",
   temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", theme: "Thème",
 };
@@ -504,7 +516,7 @@ class PelletStoveCardEditor extends HTMLElement {
       this._form.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
         const cfg = { ...this._config, ...ev.detail.value };
-        ["status_entity", "power_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+        ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
         this._config = cfg;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
       });
@@ -519,6 +531,7 @@ class PelletStoveCardEditor extends HTMLElement {
       { name: "pellet_entity", selector: { entity: {} } },
       { name: "status_entity", selector: { entity: {} } },
       { name: "power_entity", selector: { entity: { domain: ["input_number", "number"] } } },
+      { name: "power_real_entity", selector: { entity: {} } },
       { type: "grid", name: "", schema: [
         { name: "power_min", selector: { number: { min: 0, max: 20, mode: "box" } } },
         { name: "power_max", selector: { number: { min: 1, max: 20, mode: "box" } } },
