@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -364,7 +364,7 @@ class PelletStoveCard extends HTMLElement {
     const bgMode = c.image && c.image_mode !== "replace";
     const photo = c.image_mode === "replace" && c.image && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image;
     const bgLayer = c.image && bgMode && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image
-      ? `<div class="bgimg" style="background-image:url('${esc(String(c.image).replace(/'/g, "%27"))}');opacity:${isNum(c.image_opacity) ? Number(c.image_opacity) : 0.35}"></div><div class="bgshade"></div>` : "";
+      ? `<img class="bgimg" src="${esc(c.image)}" alt="" loading="lazy" style="opacity:${isNum(c.image_opacity) ? Math.max(0, Math.min(1, Number(c.image_opacity))) : 0.35}">` : "";
     const art = photo
       ? `<div class="art photo"><img src="${esc(c.image)}" alt="${esc(name)}"></div>`
       : `<div class="art">${stoveSvg(!!ss.flame, ss.on, this._uid)}</div>`;
@@ -389,10 +389,6 @@ class PelletStoveCard extends HTMLElement {
           --sv-fill:rgba(20,24,40,.06); --sv-fill-b:rgba(20,24,40,.14); --sv-track:rgba(20,24,40,.12);
           --sv-bgc:#f8f9fd; --sv-ok:#1a9d55; --sv-warn:#c77a14; --sv-err:#d32f35; --sv-fire:#e06a14; --sv-off:#8a8f9c;
         }
-        .bgimg { position:absolute; inset:0; background-size:cover; background-position:center; pointer-events:none; }
-        .bgshade { position:absolute; inset:0; pointer-events:none; background:linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--sv-bgc) 55%, transparent) 100%); }
-        ha-card > * { position:relative; }
-        ha-card > .bgimg, ha-card > .bgshade { position:absolute; }
         ha-card { position:relative; display:flex; flex-direction:column; gap:12px; padding:16px; overflow:hidden; color:var(--sv-text);
           border-radius:24px; border:1px solid var(--sv-border); background:var(--sv-bg); box-shadow:var(--sv-shadow); }
         button { font:inherit; color:inherit; cursor:pointer; border:0; background:none; padding:0; text-align:left; -webkit-tap-highlight-color:transparent; }
@@ -414,6 +410,10 @@ class PelletStoveCard extends HTMLElement {
         .power.on { color:var(--sv-fire); border-color:var(--sv-fire); }
         .panel { display:grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.15fr); gap:12px; align-items:center; padding:14px; border-radius:18px;
           background:var(--sv-glass); border:1px solid var(--sv-glass-b); -webkit-backdrop-filter:blur(18px) saturate(140%); backdrop-filter:blur(18px) saturate(140%); }
+        .panel { position:relative; overflow:hidden; }
+        .panel > :not(.bgimg) { position:relative; z-index:1; }
+        .bgimg { position:absolute; right:0; top:0; height:100%; width:62%; object-fit:contain; object-position:right center; pointer-events:none; z-index:0;
+          -webkit-mask-image:radial-gradient(ellipse 70% 80% at 70% 45%,#000 30%,transparent 78%); mask-image:radial-gradient(ellipse 70% 80% at 70% 45%,#000 30%,transparent 78%); }
         .panel.fire { box-shadow: inset 0 0 3.2em color-mix(in srgb, var(--sv-fire) 20%, transparent); }
         .art { display:flex; justify-content:center; }
         .art svg { width:100%; max-width:150px; height:auto; }
@@ -450,13 +450,13 @@ class PelletStoveCard extends HTMLElement {
         @media (prefers-reduced-motion: reduce) { .fl, .glowpulse, .led { animation:none; } }
         @container (max-width:300px) { .panel { grid-template-columns:1fr; } }
       </style>
-      <ha-card class="${dark ? "dark" : "light"}" style="${gvStyle(this._config, dark)}">${bgLayer}
+      <ha-card class="${dark ? "dark" : "light"}" style="${gvStyle(this._config, dark)}">
         <div class="head">
           <div class="title"><b>${esc(name)}</b><span class="state ${ss.key}">${esc(ss.label)}</span></div>
           ${c.show_controls && !ss.unknown ? `<button class="power ${ss.on ? "on" : ""}" data-action="power" title="${ss.on ? "Éteindre" : "Allumer"}"><ha-icon icon="mdi:power"></ha-icon></button>` : ""}
         </div>
         <div class="panel ${ss.flame ? "fire" : ""}">
-          ${art}
+          ${bgLayer}${art}
           <div class="read">
             <div><div class="lbl">Température</div>
               <button class="big" data-more="${esc(c.entity)}">${esc(cur)}<small>${esc(unit)}</small></button></div>
@@ -477,7 +477,7 @@ class PelletStoveCard extends HTMLElement {
     const root = this.shadowRoot;
     root.querySelectorAll("[data-more]").forEach((el) => el.addEventListener("click", () => this._more(el.dataset.more)));
     root.querySelectorAll("[data-level]").forEach((el) => el.addEventListener("click", () => this._setLevel(Number(el.dataset.level))));
-    root.querySelectorAll(".bgimg").forEach(() => { const im = new Image(); im.onerror = () => { this._imgFailed = c.image; this._sig = ""; this._render(); }; im.src = c.image; });
+    root.querySelectorAll("img.bgimg").forEach((im) => im.addEventListener("error", () => { this._imgFailed = c.image; this._sig = ""; this._render(); }));
     root.querySelectorAll("[data-action]").forEach((el) => el.addEventListener("click", () => {
       const a = el.dataset.action;
       if (a === "power") this._power();
@@ -492,42 +492,57 @@ class PelletStoveCard extends HTMLElement {
 /* ---------- Éditeur visuel ---------- */
 const LABELS = { ...GV_LABELS,
   entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)",
-  info_entities: "Capteurs à afficher (fumées, air, puissance...)", image: "Photo du poêle (ex. /local/poele.png)",
+  info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
-  image_mode: "Photo", image_opacity: "Opacité de la photo de fond",
+  image_mode: "Affichage de la photo", image_opacity: "Opacité de la photo de fond",
   temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", theme: "Thème",
 };
 
 class PelletStoveCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = { ...DEFAULTS, ...config };
-    this._build();
+    const infos = (config.info_entities || []).map((i) => (typeof i === "string" ? { entity: i } : { ...i }));
+    const next = { ...DEFAULTS, ...config, info_entities: infos };
+    const same = this._built && this._config && next.info_entities.length === this._config.info_entities.length;
+    this._config = next;
+    if (!same) return this._build();
+    this._forms.forEach((f) => { f.el.data = f.get(this._config); });
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
+    (this._forms || []).forEach((f) => (f.el.hass = hass));
+  }
+
+  _emit() {
+    const cfg = { ...this._config };
+    ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+    cfg.info_entities = (cfg.info_entities || []).filter((i) => i && i.entity).map((i) => {
+      const o = { entity: i.entity };
+      if (i.name) o.name = i.name;
+      if (i.icon) o.icon = i.icon;
+      return o;
+    });
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: cfg }, bubbles: true, composed: true }));
+  }
+
+  _form(schema, get, set, parent, labels) {
+    const el = document.createElement("ha-form");
+    el.hass = this._hass; el.data = get(this._config); el.schema = schema;
+    el.computeLabel = (sc) => (labels && labels[sc.name]) || LABELS[sc.name] || sc.name;
+    el.addEventListener("value-changed", (ev) => { ev.stopPropagation(); set(this._config, ev.detail.value); this._emit(); });
+    this._forms.push({ el, get });
+    parent.appendChild(el);
   }
 
   _build() {
-    if (!this._form) {
-      this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => LABELS[s.name] || s.name;
-      this._form.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-        const cfg = { ...this._config, ...ev.detail.value };
-        ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
-        this._config = cfg;
-        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
-      });
-      this.appendChild(this._form);
-    }
-    this._form.hass = this._hass;
-    this._form.data = { ...this._config, info_entities: (this._config.info_entities || []).map((i) => (typeof i === "string" ? i : i.entity)) };
-    this._form.schema = [
+    this._built = true; this._forms = []; this.innerHTML = "";
+    const st = document.createElement("style");
+    st.textContent = `.bx{border:1px solid var(--divider-color);border-radius:12px;padding:10px;margin:10px 0}.h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:600}
+      button{cursor:pointer;border:1px solid var(--divider-color);background:var(--secondary-background-color);color:var(--primary-text-color);border-radius:8px;padding:6px 10px}.add{width:100%;margin:4px 0}`;
+    this.appendChild(st);
+    const top = [
       { name: "entity", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name", selector: { text: {} } },
-      { name: "info_entities", selector: { entity: { multiple: true } } },
       { name: "pellet_entity", selector: { entity: {} } },
       { name: "status_entity", selector: { entity: {} } },
       { name: "power_entity", selector: { entity: { domain: ["input_number", "number"] } } },
@@ -539,27 +554,39 @@ class PelletStoveCardEditor extends HTMLElement {
       { name: "image", selector: { text: {} } },
       { type: "grid", name: "", schema: [
         { name: "image_mode", selector: { select: { mode: "dropdown", options: [
-          { value: "background", label: "En fond, avec le dessin animé" }, { value: "replace", label: "À la place du dessin" } ] } } },
+          { value: "background", label: "Grande, en arrière-plan (comme les électroménagers)" }, { value: "replace", label: "À la place du dessin animé" } ] } } },
         { name: "image_opacity", selector: { number: { min: 0.05, max: 1, step: 0.05, mode: "slider" } } },
       ] },
-      {
-        type: "grid", name: "", schema: [
-          { name: "temp_step", selector: { number: { min: 0, max: 5, step: 0.1, mode: "box" } } },
-          {
-            name: "theme", selector: {
-              select: {
-                mode: "dropdown", options: [
-                  { value: "auto", label: "Automatique (thème de Home Assistant)" },
-                  { value: "light", label: "Clair" },
-                  { value: "dark", label: "Sombre" },
-                ],
-              },
-            },
-          }, ...GV_FIELDS,
-        ],
-      },
+      { type: "grid", name: "", schema: [
+        { name: "temp_step", selector: { number: { min: 0, max: 5, step: 0.1, mode: "box" } } },
+        { name: "theme", selector: { select: { mode: "dropdown", options: [
+          { value: "auto", label: "Automatique (thème de Home Assistant)" }, { value: "light", label: "Clair" }, { value: "dark", label: "Sombre" } ] } } },
+        ...GV_FIELDS,
+      ] },
       { name: "show_controls", selector: { boolean: {} } },
     ];
+    this._form(top, (c) => c, (c, v) => { const keep = c.info_entities; Object.assign(c, v); c.info_entities = keep; }, this);
+    const t = document.createElement("h3"); t.textContent = "Capteurs affichés (renommables)"; this.appendChild(t);
+    const ENT = [
+      { name: "entity", selector: { entity: {} } },
+      { type: "grid", name: "", schema: [{ name: "name", selector: { text: {} } }, { name: "icon", selector: { icon: {} } }] },
+    ];
+    this._config.info_entities.forEach((e, i) => {
+      const box = document.createElement("div"); box.className = "bx";
+      box.innerHTML = `<div class="h"><span>Capteur ${i + 1}</span><span><button data-a="up" data-i="${i}">↑</button> <button data-a="down" data-i="${i}">↓</button> <button data-a="del" data-i="${i}">✕</button></span></div>`;
+      this._form(ENT, (c) => c.info_entities[i], (c, v) => { c.info_entities[i] = { ...v }; }, box, { entity: "Capteur", name: "Nom affiché (ex. Température de fumées)", icon: "Icône (facultative)" });
+      this.appendChild(box);
+    });
+    const add = document.createElement("button"); add.className = "add"; add.textContent = "+ Ajouter un capteur"; add.dataset.a = "add"; this.appendChild(add);
+    this.querySelectorAll("button[data-a]").forEach((b) => b.addEventListener("click", () => this._click(b)));
+  }
+
+  _click(b) {
+    const d = b.dataset, arr = this._config.info_entities, i = Number(d.i);
+    if (d.a === "add") arr.push({ entity: "" });
+    else if (d.a === "del") arr.splice(i, 1);
+    else { const j = i + (d.a === "up" ? -1 : 1); if (j >= 0 && j < arr.length) [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    this._emit(); this._build();
   }
 }
 

@@ -23,9 +23,12 @@ power_real_entity: sensor.maison_real_power
 power_min: 1
 power_max: 5
 pellet_entity: sensor.niveau_granules
-info_entities:
-  - sensor.maison_smoke_temperature
-  - sensor.maison_air_temperature
+info_entities:                 # capteurs renommables
+  - entity: sensor.maison_smoke_temperature
+    name: Température de fumées
+    icon: mdi:smoke
+  - entity: sensor.maison_air_temperature
+    name: Température de l'air
 theme: auto                    # auto | light | dark
 ```
 
@@ -34,7 +37,7 @@ theme: auto                    # auto | light | dark
 | `entity` | Entité `climate` du poêle (obligatoire) |
 | `name` | Nom affiché |
 | `image` | Photo du poêle (facultative) |
-| `image_mode` | `background` : photo en fond derrière le dessin animé (défaut) · `replace` : la photo remplace le dessin |
+| `image_mode` | `background` : photo en grand à droite, estompée, derrière les valeurs, comme sur les cartes électroménager (défaut) · `replace` : la photo remplace le dessin |
 | `image_opacity` | Opacité de la photo de fond |
 | `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `flame light` → Flamme allumée, `work` → Travail, `cleaning final` → Nettoyage final, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
 | `status_map` | Vos propres traductions (`état: libellé`), prioritaires sur les traductions intégrées |
@@ -42,7 +45,7 @@ theme: auto                    # auto | light | dark
 | `power_real_entity` | Lecture de la puissance réelle (affichée sous le réglage) |
 | `power_min` / `power_max` | Bornes des boutons de puissance (1 et 5 par défaut) |
 | `pellet_entity` | Niveau de granulés en % (barre colorée) |
-| `info_entities` | Capteurs affichés en tuiles (clic = historique) |
+| `info_entities` | Capteurs affichés en tuiles (clic = historique), avec `entity`, `name` (nom affiché) et `icon` facultatifs ; une simple liste d'entités reste acceptée |
 | `temp_step` | Pas de la consigne (0 = automatique) |
 | `show_controls` | Boutons marche/arrêt et consigne |
 | `theme` | `auto`, `light`, `dark` |
