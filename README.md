@@ -35,7 +35,7 @@ theme: auto                    # auto | light | dark
 | `image` | Photo du poêle (facultative) |
 | `image_mode` | `background` : photo en fond derrière le dessin animé (défaut) · `replace` : la photo remplace le dessin |
 | `image_opacity` | Opacité de la photo de fond |
-| `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `work` → Travail, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
+| `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `flame light` → Flamme allumée, `work` → Travail, `cleaning final` → Nettoyage final, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
 | `status_map` | Vos propres traductions (`état: libellé`), prioritaires sur les traductions intégrées |
 | `power_entity` | `input_number` ou `number` de puissance : boutons 1 à 5 |
 | `power_min` / `power_max` | Bornes des boutons de puissance (1 et 5 par défaut) |

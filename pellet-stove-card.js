@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.1";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -72,6 +72,9 @@ const STATUS_FR = {
   "off": ["Éteint", "off"], "stop": ["Arrêt", "off"], "stopped": ["Arrêt", "off"], "standby": ["Veille", "ok"], "stand by": ["Veille", "ok"],
   "idle": ["En attente", "ok"], "wait": ["Attente", "ok"], "waiting": ["Attente", "ok"], "on": ["Allumé", "fire"],
   "start": ["Démarrage", "fire"], "starting": ["Démarrage", "fire"], "startup": ["Démarrage", "fire"], "start up": ["Démarrage", "fire"],
+  "flame light": ["Flamme allumée", "fire"], "flame lit": ["Flamme allumée", "fire"], "flame on": ["Flamme allumée", "fire"],
+  "cleaning final": ["Nettoyage final", "warn"], "final cleaning": ["Nettoyage final", "warn"], "cleaning start": ["Nettoyage initial", "fire"], "start cleaning": ["Nettoyage initial", "fire"], "cleaning start up": ["Nettoyage initial", "fire"],
+  "off timer": ["Éteint (programmation)", "off"], "check up": ["Vérification", "fire"], "wait flame": ["Attente de flamme", "fire"],
   "ignition": ["Allumage", "fire"], "igniting": ["Allumage", "fire"], "ignite": ["Allumage", "fire"], "fire up": ["Allumage", "fire"], "test fire": ["Test d'allumage", "fire"],
   "load pellet": ["Chargement pellet", "fire"], "loading pellet": ["Chargement pellet", "fire"], "loading pellets": ["Chargement pellet", "fire"], "load pellets": ["Chargement pellet", "fire"], "fueling": ["Chargement pellet", "fire"],
   "heatup": ["Montée en température", "fire"], "heat up": ["Montée en température", "fire"], "warming up": ["Montée en température", "fire"], "preheating": ["Préchauffage", "fire"],
