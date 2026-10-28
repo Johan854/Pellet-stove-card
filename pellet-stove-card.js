@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.4.1";
+const CARD_VERSION = "1.4.2";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -60,6 +60,7 @@ const DEFAULTS = {
   bag_kg: 15, // kg par sac
   temp_step: 0, // 0 = automatique (attribut target_temp_step, sinon 0,5)
   show_controls: true,
+  power_name: "", // titre du bloc de puissance (défaut : « Puissance maximale autorisée », le poêle modulant variant de 1 jusqu'à cette valeur)
   show_chips: true, // pastilles préréglage / ventilation sous le dessin (la ventilation est masquée si le réglage de puissance est affiché)
 };
 
@@ -398,7 +399,7 @@ class PelletStoveCard extends HTMLElement {
       for (let v = pmin; v <= pmax && btns.length < 12; v++) {
         btns.push(`<button class="lv ${curv !== null && v <= curv ? "on" : ""} ${curv === v ? "cur" : ""}" data-level="${v}" aria-label="Puissance ${v}"${c.show_controls ? "" : " disabled"}>${v}</button>`);
       }
-      powerHtml = `<div class="powerbox"><div class="pwh"><span class="tl"><ha-icon icon="mdi:fire"></ha-icon><span class="tn">${esc(c.power_name || "Puissance")}</span></span>
+      powerHtml = `<div class="powerbox"><div class="pwh"><span class="tl"><ha-icon icon="mdi:fire"></ha-icon><span class="tn">${esc(c.power_name || "Puissance maximale autorisée")}</span></span>
         <button class="pwv" data-more="${esc(c.power_entity)}">${curv === null ? "—" : esc(curv) + " / " + pmax}</button></div>
         ${realHtml}
         <div class="lvls">${btns.join("")}</div></div>`;
@@ -546,7 +547,7 @@ const LABELS = { ...GV_LABELS,
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
   image_mode: "Affichage de la photo", image_opacity: "Opacité de la photo de fond",
-  temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", show_chips: "Afficher les pastilles préréglage / ventilation", theme: "Thème",
+  temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", show_chips: "Afficher les pastilles préréglage / ventilation", power_name: "Titre du bloc de puissance (facultatif)", theme: "Thème",
 };
 
 class PelletStoveCardEditor extends HTMLElement {
@@ -566,7 +567,7 @@ class PelletStoveCardEditor extends HTMLElement {
 
   _emit() {
     const cfg = { ...this._config };
-    ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+    ["status_entity", "power_name", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
     cfg.info_entities = (cfg.info_entities || []).filter((i) => i && i.entity).map((i) => {
       const o = { entity: i.entity };
       if (i.name) o.name = i.name;
@@ -603,6 +604,7 @@ class PelletStoveCardEditor extends HTMLElement {
       ] },
       { name: "status_entity", selector: { entity: {} } },
       { name: "power_entity", selector: { entity: { domain: ["input_number", "number"] } } },
+      { name: "power_name", selector: { text: {} } },
       { name: "power_real_entity", selector: { entity: {} } },
       { type: "grid", name: "", schema: [
         { name: "power_min", selector: { number: { min: 0, max: 20, mode: "box" } } },
