@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -54,6 +54,10 @@ const DEFAULTS = {
   power_max: 5,
   info_entities: [],
   pellet_entity: "",
+  bag_button_entity: "", // input_button / button : ajoute un sac au compteur (confirmation demandée)
+  bag_counter_entity: "", // compteur de granulés (m³)
+  bag_volume: 0.0224, // m³ par sac
+  bag_kg: 15, // kg par sac
   temp_step: 0, // 0 = automatique (attribut target_temp_step, sinon 0,5)
   show_controls: true,
 };
@@ -192,7 +196,7 @@ class PelletStoveCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     const infos = this._infos().map((i) => i.entity);
-    const ids = [this._config.entity, this._config.pellet_entity, this._config.status_entity, this._config.power_entity, this._config.power_real_entity, ...infos].filter(Boolean);
+    const ids = [this._config.entity, this._config.pellet_entity, this._config.bag_counter_entity, this._config.status_entity, this._config.power_entity, this._config.power_real_entity, ...infos].filter(Boolean);
     const sig = ids.map((e) => {
       const s = hass.states[e];
       return s ? s.state + "|" + JSON.stringify([s.attributes.hvac_action, s.attributes.temperature, s.attributes.current_temperature]) : "x";
@@ -227,6 +231,22 @@ class PelletStoveCard extends HTMLElement {
 
   _unit() {
     return (this._hass && this._hass.config && this._hass.config.unit_system && this._hass.config.unit_system.temperature) || "°C";
+  }
+
+  _bag(step) {
+    const eid = this._config.bag_button_entity;
+    if (!eid) return;
+    clearTimeout(this._bagTimer);
+    if (step === "ask") {
+      this._bagConfirm = true;
+      this._bagTimer = setTimeout(() => { this._bagConfirm = false; this._sig = ""; this._render(); }, 8000);
+    } else if (step === "yes") {
+      this._bagConfirm = false;
+      this._hass.callService(eid.split(".")[0], "press", { entity_id: eid });
+      this._bagDone = true;
+      this._bagTimer = setTimeout(() => { this._bagDone = false; this._sig = ""; this._render(); }, 2500);
+    } else this._bagConfirm = false;
+    this._sig = ""; this._render();
   }
 
   _more(id) {
@@ -342,6 +362,28 @@ class PelletStoveCard extends HTMLElement {
         <i class="bar"><u style="width:${lvl === null ? 0 : lvl}%"></u></i></button>`;
     }
 
+    // Sacs de granulés : compteur + ajout avec confirmation
+    let bagHtml = "";
+    if (c.bag_button_entity || c.bag_counter_entity) {
+      const bs = c.bag_counter_entity ? h.states[c.bag_counter_entity] : null;
+      const vol = Number(c.bag_volume) > 0 ? Number(c.bag_volume) : 0.0224, kg = Number(c.bag_kg) > 0 ? Number(c.bag_kg) : 15;
+      const okc = bs && !bad(bs) && isNum(bs.state);
+      const val = okc ? Number(bs.state) : null;
+      const unitC = (bs && bs.attributes.unit_of_measurement) || "m³";
+      const bags = val === null ? null : Math.round(val / vol);
+      const sub = bags === null ? "" : `≈ ${bags} sac${bags > 1 ? "s" : ""} · ${this._fmt(bags * kg, 0)} kg`;
+      let action = "";
+      if (c.bag_button_entity) {
+        action = this._bagConfirm
+          ? `<div class="bgc"><span>Ajouter 1 sac (${esc(this._fmt(kg, 0))} kg, ${esc(this._fmt(vol, 4))} m³) ?</span><div class="bgb"><button class="bgy" data-bag="yes"><ha-icon icon="mdi:check"></ha-icon>Confirmer</button><button class="bgn" data-bag="no">Annuler</button></div></div>`
+          : this._bagDone ? `<button class="bga done" disabled><ha-icon icon="mdi:check-circle-outline"></ha-icon>Sac ajouté</button>`
+          : `<button class="bga" data-bag="ask"><ha-icon icon="mdi:plus-circle-outline"></ha-icon>Ajouter un sac</button>`;
+      }
+      bagHtml = `<div class="bag"><button class="bgi" ${c.bag_counter_entity ? `data-more="${esc(c.bag_counter_entity)}"` : "disabled"}>
+          <span class="tl"><ha-icon icon="mdi:sack"></ha-icon><span class="tn">Granulés enfournés</span></span>
+          <span class="pv">${val === null ? "—" : esc(this._fmt(val, 3)) + " " + esc(unitC)}</span>${sub ? `<span class="bgs">${esc(sub)}</span>` : ""}</button>${action}</div>`;
+    }
+
     // Puissance (1 à 5)
     let powerHtml = "";
     if (c.power_entity) {
@@ -440,6 +482,12 @@ class PelletStoveCard extends HTMLElement {
         .bar { display:block; height:.35em; border-radius:.2em; background:var(--sv-track); overflow:hidden; }
         .bar u { display:block; height:100%; border-radius:inherit; background:var(--sv-ok); text-decoration:none; transition:width .4s; }
         .pellet.warn .bar u { background:var(--sv-warn); } .pellet.err .bar u, .pellet.off .bar u { background:var(--sv-err); }
+        .bag { display:flex; flex-direction:column; gap:.6em; padding:.7em .85em; border-radius:1em; background:var(--sv-glass); border:1px solid var(--sv-glass-b); }
+        .bgi { display:flex; flex-direction:column; gap:.25em; text-align:left; } .bgs { font-size:.78em; color:var(--sv-muted); }
+        .bga, .bgy, .bgn { display:flex; align-items:center; justify-content:center; gap:.4em; padding:.55em .9em; border-radius:2em; font-weight:600; background:var(--sv-glass); border:1px solid var(--sv-glass-b); }
+        .bga:hover { border-color:var(--sv-ok); } .bga.done { color:var(--sv-ok); border-color:var(--sv-ok); }
+        .bgc { display:flex; flex-direction:column; gap:.5em; font-size:.85em; } .bgb { display:flex; gap:.5em; } .bgb button { flex:1; }
+        .bgy { color:var(--sv-ok); border-color:var(--sv-ok); }
         .pellet.err .pv { color:var(--sv-err); } .pellet.warn .pv { color:var(--sv-warn); }
         /* flamme */
         .fl { transform-box:fill-box; transform-origin:50% 100%; animation:sv-flick 1.4s ease-in-out infinite; }
@@ -471,11 +519,13 @@ class PelletStoveCard extends HTMLElement {
         ${extraHtml}
         ${powerHtml}
         ${pellet}
+        ${bagHtml}
         ${tiles ? `<div class="tiles">${tiles}</div>` : ""}
       </ha-card>`;
 
     const root = this.shadowRoot;
     root.querySelectorAll("[data-more]").forEach((el) => el.addEventListener("click", () => this._more(el.dataset.more)));
+    root.querySelectorAll("[data-bag]").forEach((el) => el.addEventListener("click", () => this._bag(el.dataset.bag)));
     root.querySelectorAll("[data-level]").forEach((el) => el.addEventListener("click", () => this._setLevel(Number(el.dataset.level))));
     root.querySelectorAll("img.bgimg").forEach((im) => im.addEventListener("error", () => { this._imgFailed = c.image; this._sig = ""; this._render(); }));
     root.querySelectorAll("[data-action]").forEach((el) => el.addEventListener("click", () => {
@@ -491,7 +541,7 @@ class PelletStoveCard extends HTMLElement {
 
 /* ---------- Éditeur visuel ---------- */
 const LABELS = { ...GV_LABELS,
-  entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)",
+  entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)", bag_button_entity: "Sacs : bouton d'ajout (input_button)", bag_counter_entity: "Sacs : compteur de granulés (m³)", bag_volume: "Volume d'un sac (m³)", bag_kg: "Poids d'un sac (kg)",
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
   image_mode: "Affichage de la photo", image_opacity: "Opacité de la photo de fond",
@@ -515,7 +565,7 @@ class PelletStoveCardEditor extends HTMLElement {
 
   _emit() {
     const cfg = { ...this._config };
-    ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+    ["status_entity", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
     cfg.info_entities = (cfg.info_entities || []).filter((i) => i && i.entity).map((i) => {
       const o = { entity: i.entity };
       if (i.name) o.name = i.name;
@@ -544,6 +594,12 @@ class PelletStoveCardEditor extends HTMLElement {
       { name: "entity", required: true, selector: { entity: { domain: "climate" } } },
       { name: "name", selector: { text: {} } },
       { name: "pellet_entity", selector: { entity: {} } },
+      { name: "bag_button_entity", selector: { entity: { domain: ["input_button", "button"] } } },
+      { name: "bag_counter_entity", selector: { entity: { domain: "sensor" } } },
+      { type: "grid", name: "", schema: [
+        { name: "bag_volume", selector: { number: { min: 0.001, max: 1, step: 0.0001, mode: "box" } } },
+        { name: "bag_kg", selector: { number: { min: 1, max: 100, mode: "box" } } },
+      ] },
       { name: "status_entity", selector: { entity: {} } },
       { name: "power_entity", selector: { entity: { domain: ["input_number", "number"] } } },
       { name: "power_real_entity", selector: { entity: {} } },

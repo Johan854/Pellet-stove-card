@@ -75,3 +75,16 @@ Sans cette ligne, `nuance: theme` garde les couleurs d'origine de la carte.
 ## Historique des versions
 
 - **1.1.0** : nuance de couleur au choix (8 nuances, couleur personnalisée, intensité, ou nuance commune via `carte-nuance` dans le thème).
+
+## Compteur de sacs de granulés (v1.4.0)
+
+Affiche le compteur de granulés (m³), le nombre de sacs et le poids estimé, avec un bouton **Ajouter un sac** qui demande une confirmation avant d'appuyer sur ton bouton.
+
+```yaml
+bag_button_entity: input_button.ajout_de_granules
+bag_counter_entity: sensor.sac_granules
+bag_volume: 0.0224   # m³ par sac
+bag_kg: 15           # kg par sac
+```
+
+Le bouton est pressé avec `input_button.press` (ou `button.press`) ; c'est ton compteur qui s'incrémente, la carte ne modifie aucune valeur elle-même.
