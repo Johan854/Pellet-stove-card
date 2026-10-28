@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.4.1";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -60,6 +60,7 @@ const DEFAULTS = {
   bag_kg: 15, // kg par sac
   temp_step: 0, // 0 = automatique (attribut target_temp_step, sinon 0,5)
   show_controls: true,
+  show_chips: true, // pastilles préréglage / ventilation sous le dessin (la ventilation est masquée si le réglage de puissance est affiché)
 };
 
 const esc = (s) =>
@@ -411,7 +412,7 @@ class PelletStoveCard extends HTMLElement {
       ? `<div class="art photo"><img src="${esc(c.image)}" alt="${esc(name)}"></div>`
       : `<div class="art">${stoveSvg(!!ss.flame, ss.on, this._uid)}</div>`;
 
-    const extra = [attrs.preset_mode, attrs.fan_mode].filter(Boolean);
+    const extra = c.show_chips === false ? [] : [attrs.preset_mode, c.power_entity ? null : attrs.fan_mode].filter(Boolean);
     const extraHtml = extra.length ? `<div class="chips">${extra.map((e) => `<span class="chip">${esc(e)}</span>`).join("")}</div>` : "";
 
     this.shadowRoot.innerHTML = `
@@ -545,7 +546,7 @@ const LABELS = { ...GV_LABELS,
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
   image_mode: "Affichage de la photo", image_opacity: "Opacité de la photo de fond",
-  temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", theme: "Thème",
+  temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", show_chips: "Afficher les pastilles préréglage / ventilation", theme: "Thème",
 };
 
 class PelletStoveCardEditor extends HTMLElement {
@@ -620,6 +621,7 @@ class PelletStoveCardEditor extends HTMLElement {
         ...GV_FIELDS,
       ] },
       { name: "show_controls", selector: { boolean: {} } },
+      { name: "show_chips", selector: { boolean: {} } },
     ];
     this._form(top, (c) => c, (c, v) => { const keep = c.info_entities; Object.assign(c, v); c.info_entities = keep; }, this);
     const t = document.createElement("h3"); t.textContent = "Capteurs affichés (renommables)"; this.appendChild(t);
