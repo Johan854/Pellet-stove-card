@@ -39,6 +39,8 @@ theme: auto                    # auto | light | dark
 | `image` | Photo du poêle (facultative) |
 | `image_mode` | `background` : photo en grand à droite, estompée, derrière les valeurs, comme sur les cartes électroménager (défaut) · `replace` : la photo remplace le dessin |
 | `image_opacity` | Opacité de la photo de fond |
+| `image_on` | Image du poêle allumé (ex. une image animée `.webp`), affichée à la place du dessin quand la flamme brûle |
+| `image_off` | Image du poêle éteint, affichée à la place du dessin le reste du temps |
 | `status_entity` | Entité dont l'état est traduit en français (`load pellet` → Chargement pellet, `flame light` → Flamme allumée, `work` → Travail, `cleaning final` → Nettoyage final, `ext`/`extinguish` → Extinction…) ; la flamme suit le statut |
 | `status_map` | Vos propres traductions (`état: libellé`), prioritaires sur les traductions intégrées |
 | `power_entity` | `input_number` ou `number` de puissance : boutons 1 à 5 |
@@ -88,3 +90,14 @@ bag_kg: 15           # kg par sac
 ```
 
 Le bouton est pressé avec `input_button.press` (ou `button.press`) ; c'est ton compteur qui s'incrémente, la carte ne modifie aucune valeur elle-même.
+
+## Images du poêle allumé / éteint (v1.5.0)
+
+Remplace le dessin animé par tes propres images, choisies selon l'état de la flamme (fondu enchaîné entre les deux). Une image animée (WebP ou GIF) reste fluide : elle n'est pas rechargée à chaque mise à jour des capteurs.
+
+```yaml
+image_on: /local/poele_anime.webp   # flamme allumée
+image_off: /local/poele_eteint.png  # poêle éteint ou en attente
+```
+
+Place les fichiers dans `/config/www/`. Avec une seule des deux images, elle sert dans les deux cas. Des images à fond transparent (PNG, WebP) se fondent dans la carte, en thème clair comme sombre.

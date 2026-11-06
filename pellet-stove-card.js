@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.4.2";
+const CARD_VERSION = "1.5.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -46,6 +46,8 @@ const DEFAULTS = {
   image: "", // photo du poêle (facultatif), ex. /local/poele.png
   image_mode: "background", // background : photo en fond + dessin animé | replace : la photo remplace le dessin
   image_opacity: 0.35,
+  image_on: "", // image du poêle allumé (ex. /local/poele_anime.webp) : remplace le dessin animé quand la flamme brûle
+  image_off: "", // image du poêle éteint (ex. /local/poele_eteint.png) : remplace le dessin quand il n'y a pas de flamme
   status_entity: "", // entité dont l'état (en anglais) est traduit en français, ex. sensor.poele_status
   status_map: {}, // traductions personnalisées : { "load pellet": "Chargement pellet" }
   power_entity: "", // input_number / number de puissance (1 à 5)
@@ -409,7 +411,14 @@ class PelletStoveCard extends HTMLElement {
     const photo = c.image_mode === "replace" && c.image && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image;
     const bgLayer = c.image && bgMode && !/^\s*(javascript|vbscript|data:text)/i.test(String(c.image)) && this._imgFailed !== c.image
       ? `<img class="bgimg" src="${esc(c.image)}" alt="" loading="lazy" style="opacity:${isNum(c.image_opacity) ? Math.max(0, Math.min(1, Number(c.image_opacity))) : 0.35}">` : "";
-    const art = photo
+    const okUrl = (u) => u && !/^\s*(javascript|vbscript|data:text)/i.test(String(u)) && !(this._imgBad && this._imgBad[u]);
+    const imOn = okUrl(c.image_on) ? c.image_on : okUrl(c.image_off) ? c.image_off : "";
+    const imOff = okUrl(c.image_off) ? c.image_off : imOn;
+    const stoveImgs = imOn || imOff;
+    // les deux images restent chargées : le passage allumé / éteint est instantané
+    const art = stoveImgs
+      ? `<div class="art stoveimg" data-key="${esc(imOn + "|" + imOff)}">${[...new Set([imOn, imOff])].map((u) => `<img src="${esc(u)}" alt="${esc(name)}" data-src="${esc(u)}" class="${u === (ss.flame ? imOn : imOff) ? "act" : ""}">`).join("")}</div>`
+      : photo
       ? `<div class="art photo"><img src="${esc(c.image)}" alt="${esc(name)}"></div>`
       : `<div class="art">${stoveSvg(!!ss.flame, ss.on, this._uid)}</div>`;
 
@@ -462,6 +471,10 @@ class PelletStoveCard extends HTMLElement {
         .art { display:flex; justify-content:center; }
         .art svg { width:100%; max-width:150px; height:auto; }
         .art.photo img { max-width:100%; max-height:190px; object-fit:contain; border-radius:12px; }
+        .art.stoveimg { display:grid; place-items:center; }
+        .art.stoveimg img { grid-area:1/1; width:100%; max-width:170px; max-height:230px; object-fit:contain; opacity:0; transition:opacity .6s ease; }
+        .art.stoveimg img.act { opacity:1; }
+        .panel.fire .art.stoveimg img.act { filter:drop-shadow(0 0 10px color-mix(in srgb, var(--sv-fire) 45%, transparent)); }
         .panel.fire .art.photo img { filter:drop-shadow(0 0 14px color-mix(in srgb, var(--sv-fire) 60%, transparent)); }
         .read { display:flex; flex-direction:column; gap:12px; min-width:0; }
         .lbl { font-size:.72em; text-transform:uppercase; letter-spacing:.08em; color:var(--sv-muted); }
@@ -535,6 +548,22 @@ class PelletStoveCard extends HTMLElement {
       if (a === "power") this._power();
       else this._adjust(a === "up" ? 1 : -1);
     }));
+    // on réutilise les images déjà affichées : l'animation ne redémarre pas à chaque mise à jour des capteurs
+    const fresh = root.querySelector(".art.stoveimg");
+    if (fresh && this._artEl && this._artEl.dataset.key === fresh.dataset.key) {
+      const want = fresh.querySelector("img.act");
+      this._artEl.querySelectorAll("img").forEach((im) => im.classList.toggle("act", !!want && im.dataset.src === want.dataset.src));
+      fresh.replaceWith(this._artEl);
+      return this._wire(root, c);
+    }
+    this._artEl = fresh || null;
+    return this._wire(root, c, true);
+  }
+
+  _wire(root, c, imgs) {
+    if (imgs) root.querySelectorAll(".art.stoveimg img").forEach((img) => img.addEventListener("error", () => {
+      this._imgBad = { ...(this._imgBad || {}), [img.dataset.src]: true }; this._sig = ""; this._render();
+    }));
     root.querySelectorAll(".art.photo img").forEach((img) => img.addEventListener("error", () => {
       this._imgFailed = c.image; this._sig = ""; this._render();
     }));
@@ -546,7 +575,7 @@ const LABELS = { ...GV_LABELS,
   entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)", bag_button_entity: "Sacs : bouton d'ajout (input_button)", bag_counter_entity: "Sacs : compteur de granulés (m³)", bag_volume: "Volume d'un sac (m³)", bag_kg: "Poids d'un sac (kg)",
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
-  image_mode: "Affichage de la photo", image_opacity: "Opacité de la photo de fond",
+  image_mode: "Affichage de la photo", image_on: "Image du poêle allumé (ex. /local/poele_anime.webp)", image_off: "Image du poêle éteint (ex. /local/poele_eteint.png)", image_opacity: "Opacité de la photo de fond",
   temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", show_chips: "Afficher les pastilles préréglage / ventilation", power_name: "Titre du bloc de puissance (facultatif)", theme: "Thème",
 };
 
@@ -567,7 +596,7 @@ class PelletStoveCardEditor extends HTMLElement {
 
   _emit() {
     const cfg = { ...this._config };
-    ["status_entity", "power_name", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+    ["status_entity", "power_name", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image", "image_on", "image_off"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
     cfg.info_entities = (cfg.info_entities || []).filter((i) => i && i.entity).map((i) => {
       const o = { entity: i.entity };
       if (i.name) o.name = i.name;
@@ -609,6 +638,10 @@ class PelletStoveCardEditor extends HTMLElement {
       { type: "grid", name: "", schema: [
         { name: "power_min", selector: { number: { min: 0, max: 20, mode: "box" } } },
         { name: "power_max", selector: { number: { min: 1, max: 20, mode: "box" } } },
+      ] },
+      { type: "grid", name: "", schema: [
+        { name: "image_on", selector: { text: {} } },
+        { name: "image_off", selector: { text: {} } },
       ] },
       { name: "image", selector: { text: {} } },
       { type: "grid", name: "", schema: [
