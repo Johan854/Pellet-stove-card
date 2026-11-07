@@ -112,3 +112,12 @@ image_off: /local/poele_eteint.png
 image_loading: /local/poele_chargement.webp   # granulés qui tombent dans le creuset
 # image_loading_states: ["load pellet"]       # facultatif : statuts qui affichent cette image
 ```
+
+## Image pendant le nettoyage final (v1.7.0)
+
+```yaml
+image_cleaning: /local/poele_nettoyage.webp   # braises qui s'éteignent, cendres qui tourbillonnent
+# image_cleaning_states: ["NETTOYAGE FINAL"]  # facultatif : statuts qui affichent cette image
+```
+
+Par défaut, l'image s'affiche sur « NETTOYAGE FINAL », « cleaning final » et équivalents.
