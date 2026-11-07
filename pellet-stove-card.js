@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.6.0";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -48,6 +48,8 @@ const DEFAULTS = {
   image_opacity: 0.35,
   image_on: "", // image du poêle allumé (ex. /local/poele_anime.webp) : remplace le dessin animé quand la flamme brûle
   image_off: "", // image du poêle éteint (ex. /local/poele_eteint.png) : remplace le dessin quand il n'y a pas de flamme
+  image_loading: "", // image pendant le chargement des granulés (ex. /local/poele_chargement.webp), selon l'entité de statut
+  image_loading_states: [], // statuts (en anglais) qui affichent image_loading ; vide = « load pellet » et équivalents
   status_entity: "", // entité dont l'état (en anglais) est traduit en français, ex. sensor.poele_status
   status_map: {}, // traductions personnalisées : { "load pellet": "Chargement pellet" }
   power_entity: "", // input_number / number de puissance (1 à 5)
@@ -414,10 +416,15 @@ class PelletStoveCard extends HTMLElement {
     const okUrl = (u) => u && !/^\s*(javascript|vbscript|data:text)/i.test(String(u)) && !(this._imgBad && this._imgBad[u]);
     const imOn = okUrl(c.image_on) ? c.image_on : okUrl(c.image_off) ? c.image_off : "";
     const imOff = okUrl(c.image_off) ? c.image_off : imOn;
-    const stoveImgs = imOn || imOff;
+    const imLoad = okUrl(c.image_loading) ? c.image_loading : "";
+    const LOAD_KEYS = ["load pellet", "loading pellet", "loading pellets", "load pellets", "pellet load", "fueling"];
+    const loadKeys = (Array.isArray(c.image_loading_states) && c.image_loading_states.length ? c.image_loading_states : LOAD_KEYS).map(normStatus);
+    const loading = !!(imLoad && sst && loadKeys.includes(normStatus(sst.state)));
+    const imAct = loading ? imLoad : ss.flame ? imOn : imOff;
+    const stoveImgs = imOn || imOff || imLoad;
     // les deux images restent chargées : le passage allumé / éteint est instantané
     const art = stoveImgs
-      ? `<div class="art stoveimg" data-key="${esc(imOn + "|" + imOff)}">${[...new Set([imOn, imOff])].map((u) => `<img src="${esc(u)}" alt="${esc(name)}" data-src="${esc(u)}" class="${u === (ss.flame ? imOn : imOff) ? "act" : ""}">`).join("")}</div>`
+      ? `<div class="art stoveimg" data-key="${esc(imOn + "|" + imOff + "|" + imLoad)}">${[...new Set([imOn, imOff, imLoad].filter(Boolean))].map((u) => `<img src="${esc(u)}" alt="${esc(name)}" data-src="${esc(u)}" class="${u === (imAct || imOn || imOff) ? "act" : ""}">`).join("")}</div>`
       : photo
       ? `<div class="art photo"><img src="${esc(c.image)}" alt="${esc(name)}"></div>`
       : `<div class="art">${stoveSvg(!!ss.flame, ss.on, this._uid)}</div>`;
@@ -575,7 +582,7 @@ const LABELS = { ...GV_LABELS,
   entity: "Poêle (entité climate)", name: "Nom (facultatif)", pellet_entity: "Niveau de granulés (facultatif)", bag_button_entity: "Sacs : bouton d'ajout (input_button)", bag_counter_entity: "Sacs : compteur de granulés (m³)", bag_volume: "Volume d'un sac (m³)", bag_kg: "Poids d'un sac (kg)",
   info_entities: "Capteurs à afficher (fumées, air, puissance...)", icon: "Icône (facultative)", image: "Photo du poêle (ex. /local/poele.png)",
   status_entity: "Entité du statut (traduit en français)", power_entity: "Puissance (input_number / number)", power_real_entity: "Lecture de la puissance réelle (facultatif)", power_min: "Puissance minimale", power_max: "Puissance maximale",
-  image_mode: "Affichage de la photo", image_on: "Image du poêle allumé (ex. /local/poele_anime.webp)", image_off: "Image du poêle éteint (ex. /local/poele_eteint.png)", image_opacity: "Opacité de la photo de fond",
+  image_mode: "Affichage de la photo", image_on: "Image du poêle allumé (ex. /local/poele_anime.webp)", image_off: "Image du poêle éteint (ex. /local/poele_eteint.png)", image_loading: "Image pendant le chargement des granulés (ex. /local/poele_chargement.webp)", image_opacity: "Opacité de la photo de fond",
   temp_step: "Pas de la consigne (0 = automatique)", show_controls: "Afficher les boutons (marche/arrêt, consigne)", show_chips: "Afficher les pastilles préréglage / ventilation", power_name: "Titre du bloc de puissance (facultatif)", theme: "Thème",
 };
 
@@ -596,7 +603,7 @@ class PelletStoveCardEditor extends HTMLElement {
 
   _emit() {
     const cfg = { ...this._config };
-    ["status_entity", "power_name", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image", "image_on", "image_off"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
+    ["status_entity", "power_name", "power_entity", "power_real_entity", "pellet_entity", "bag_button_entity", "bag_counter_entity", "image", "image_on", "image_off", "image_loading"].forEach((k) => { if (cfg[k] === "" || cfg[k] == null) delete cfg[k]; });
     cfg.info_entities = (cfg.info_entities || []).filter((i) => i && i.entity).map((i) => {
       const o = { entity: i.entity };
       if (i.name) o.name = i.name;
@@ -643,6 +650,7 @@ class PelletStoveCardEditor extends HTMLElement {
         { name: "image_on", selector: { text: {} } },
         { name: "image_off", selector: { text: {} } },
       ] },
+      { name: "image_loading", selector: { text: {} } },
       { name: "image", selector: { text: {} } },
       { type: "grid", name: "", schema: [
         { name: "image_mode", selector: { select: { mode: "dropdown", options: [

@@ -101,3 +101,14 @@ image_off: /local/poele_eteint.png  # poêle éteint ou en attente
 ```
 
 Place les fichiers dans `/config/www/`. Avec une seule des deux images, elle sert dans les deux cas. Des images à fond transparent (PNG, WebP) se fondent dans la carte, en thème clair comme sombre.
+
+## Image pendant le chargement des granulés (v1.6.0)
+
+Avec une entité de statut (`status_entity`), la carte peut afficher une troisième image pendant le chargement des granulés (statut « load pellet » et équivalents) :
+
+```yaml
+image_on: /local/poele_anime.webp
+image_off: /local/poele_eteint.png
+image_loading: /local/poele_chargement.webp   # granulés qui tombent dans le creuset
+# image_loading_states: ["load pellet"]       # facultatif : statuts qui affichent cette image
+```
