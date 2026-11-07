@@ -7,7 +7,7 @@
  * Fonctionne avec n'importe quelle entité « climate ».
  */
 
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.6.1";
 
 /* === NUANCE COMMUNE v2 (cartes Johan854) ===
  * Bloc identique dans toutes les cartes. Options : nuance, nuance_perso, intensite.
@@ -94,7 +94,7 @@ const STATUS_FR = {
   "pellet light prep": ["Préparation allumage", "fire"], "start phase i": ["Démarrage phase 1", "fire"], "start phase ii": ["Démarrage phase 2", "fire"],
   "t off": ["Éteint (programmation)", "off"], "toff": ["Éteint (programmation)", "off"], "t ext": ["Éteint (thermostat)", "off"],
   "ignition": ["Allumage", "fire"], "igniting": ["Allumage", "fire"], "ignite": ["Allumage", "fire"], "fire up": ["Allumage", "fire"], "test fire": ["Test d'allumage", "fire"],
-  "load pellet": ["Chargement pellet", "fire"], "loading pellet": ["Chargement pellet", "fire"], "loading pellets": ["Chargement pellet", "fire"], "load pellets": ["Chargement pellet", "fire"], "fueling": ["Chargement pellet", "fire"],
+  "load pellet": ["Chargement pellet", "fire"], "loading pellet": ["Chargement pellet", "fire"], "loading pellets": ["Chargement pellet", "fire"], "load pellets": ["Chargement pellet", "fire"], "fueling": ["Chargement pellet", "fire"], "charge pellet": ["Chargement pellet", "fire"], "charge pellets": ["Chargement pellet", "fire"], "chargement pellet": ["Chargement pellet", "fire"],
   "heatup": ["Montée en température", "fire"], "heat up": ["Montée en température", "fire"], "warming up": ["Montée en température", "fire"], "preheating": ["Préchauffage", "fire"],
   "work": ["Travail", "fire"], "working": ["Travail", "fire"], "run": ["Travail", "fire"], "running": ["Travail", "fire"], "burning": ["Combustion", "fire"], "burn": ["Combustion", "fire"], "heating": ["En chauffe", "fire"],
   "modulation": ["Modulation", "fire"], "modulating": ["Modulation", "fire"], "burning mod": ["Combustion modulée", "fire"], "eco": ["Éco", "ok"], "ecomode": ["Éco", "ok"], "eco mode": ["Éco", "ok"],
@@ -417,7 +417,7 @@ class PelletStoveCard extends HTMLElement {
     const imOn = okUrl(c.image_on) ? c.image_on : okUrl(c.image_off) ? c.image_off : "";
     const imOff = okUrl(c.image_off) ? c.image_off : imOn;
     const imLoad = okUrl(c.image_loading) ? c.image_loading : "";
-    const LOAD_KEYS = ["load pellet", "loading pellet", "loading pellets", "load pellets", "pellet load", "fueling"];
+    const LOAD_KEYS = ["load pellet", "loading pellet", "loading pellets", "load pellets", "pellet load", "fueling", "charge pellet", "charge pellets", "chargement pellet"];
     const loadKeys = (Array.isArray(c.image_loading_states) && c.image_loading_states.length ? c.image_loading_states : LOAD_KEYS).map(normStatus);
     const loading = !!(imLoad && sst && loadKeys.includes(normStatus(sst.state)));
     const imAct = loading ? imLoad : ss.flame ? imOn : imOff;

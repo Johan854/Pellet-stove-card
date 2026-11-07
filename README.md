@@ -104,7 +104,7 @@ Place les fichiers dans `/config/www/`. Avec une seule des deux images, elle ser
 
 ## Image pendant le chargement des granulés (v1.6.0)
 
-Avec une entité de statut (`status_entity`), la carte peut afficher une troisième image pendant le chargement des granulés (statut « load pellet » et équivalents) :
+Avec une entité de statut (`status_entity`), la carte peut afficher une troisième image pendant le chargement des granulés (statut « load pellet », « CHARGE PELLET » et équivalents) :
 
 ```yaml
 image_on: /local/poele_anime.webp
